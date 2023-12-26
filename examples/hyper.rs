@@ -6,8 +6,9 @@
 /// but it works in the end.
 mod hyper_compat {
     use futures_lite::{AsyncRead, AsyncWrite, Future};
-    use hyper::service::service_fn;
+    use hyper::{rt::ReadBufCursor, server::conn::http1, service::service_fn};
     use std::{
+        mem::MaybeUninit,
         net::SocketAddr,
         pin::Pin,
         task::{Context, Poll},
@@ -18,42 +19,27 @@ mod hyper_compat {
         net::{TcpListener, TcpStream},
         sync::Semaphore,
     };
-    use hyper::{server::conn::Http, Body, Request, Response};
+    use hyper::{Request, Response};
     use std::{io, rc::Rc};
-    use tokio::io::ReadBuf;
-
-    #[derive(Clone)]
-    struct HyperExecutor;
-
-    impl<F> hyper::rt::Executor<F> for HyperExecutor
-    where
-        F: Future + 'static,
-        F::Output: 'static,
-    {
-        fn execute(&self, fut: F) {
-            glommio::spawn_local(fut).detach();
-        }
-    }
 
     struct HyperStream(pub TcpStream);
-    impl tokio::io::AsyncRead for HyperStream {
+    impl hyper::rt::Read for HyperStream {
         fn poll_read(
             mut self: Pin<&mut Self>,
             cx: &mut Context,
-            buf: &mut ReadBuf<'_>,
+            mut buf: ReadBufCursor<'_>,
         ) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0)
-                .poll_read(cx, buf.initialize_unfilled())
-                .map(|n| {
-                    if let Ok(n) = n {
-                        buf.advance(n);
-                    }
-                    Ok(())
-                })
+            let inner = unsafe { &mut *(buf.as_mut() as *mut [MaybeUninit<u8>] as *mut [u8]) };
+            Pin::new(&mut self.0).poll_read(cx, inner).map(|n| {
+                if let Ok(n) = n {
+                    unsafe { buf.advance(n) };
+                }
+                Ok(())
+            })
         }
     }
 
-    impl tokio::io::AsyncWrite for HyperStream {
+    impl hyper::rt::Write for HyperStream {
         fn poll_write(
             mut self: Pin<&mut Self>,
             cx: &mut Context,
@@ -77,8 +63,8 @@ mod hyper_compat {
         max_connections: usize,
     ) -> io::Result<()>
     where
-        S: FnMut(Request<Body>) -> F + 'static + Copy,
-        F: Future<Output = Result<Response<Body>, R>> + 'static,
+        S: Fn(Request<hyper::body::Incoming>) -> F + 'static + Copy,
+        F: Future<Output = Result<Response<String>, R>> + 'static,
         R: std::error::Error + 'static + Send + Sync,
         A: Into<SocketAddr>,
     {
@@ -93,7 +79,7 @@ mod hyper_compat {
                     let addr = stream.local_addr().unwrap();
                     glommio::spawn_local(enclose!{(conn_control) async move {
                         let _permit = conn_control.acquire_permit(1).await;
-                        if let Err(x) = Http::new().with_executor(HyperExecutor).serve_connection(HyperStream(stream), service_fn(service)).await {
+                        if let Err(x) = http1::Builder::new().serve_connection(HyperStream(stream), service_fn(service)).await {
                             if !x.is_incomplete_message() {
                                 eprintln!("Stream from {addr:?} failed with error {x:?}");
                             }
@@ -106,16 +92,16 @@ mod hyper_compat {
 }
 
 use glommio::{CpuSet, LocalExecutorPoolBuilder, PoolPlacement};
-use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::{Method, Request, Response, StatusCode};
 use std::convert::Infallible;
 
-async fn hyper_demo(req: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn hyper_demo(req: Request<hyper::body::Incoming>) -> Result<Response<String>, Infallible> {
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/hello") => Ok(Response::new(Body::from("world"))),
-        (&Method::GET, "/world") => Ok(Response::new(Body::from("hello"))),
+        (&Method::GET, "/hello") => Ok(Response::new("world".to_owned())),
+        (&Method::GET, "/world") => Ok(Response::new("hello".to_owned())),
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
-            .body(Body::from("notfound"))
+            .body("notfound".to_owned())
             .unwrap()),
     }
 }
