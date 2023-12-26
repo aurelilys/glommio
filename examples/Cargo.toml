@@ -7,17 +7,17 @@ edition = "2021"
 
 [dev-dependencies]
 yansi = "~0.5.1"
-clap = "2.33"
-fastrand = "1.4.0"
-futures = "~0.3.5"
-futures-lite = "1.11.1"
+bytesize = "1.3.0"
+clap = "4.4"
+fastrand = "2.0.1"
+futures = "~0.3.30"
+futures-lite = "2.1.0"
 glommio = { path = "../glommio" }
 
 # hyper and tokio for the hyper example. We just need the traits from Tokio
 hyper = { version = "0.14", features = ["full"] }
-num_cpus = "1.13.0"
-pretty-bytes = "~0.2.2"
-sys-info = "~0.8.0"
+num_cpus = "1.16.0"
+sys-info = "~0.9.1"
 tokio = { version = "1" }
 
 [[example]]

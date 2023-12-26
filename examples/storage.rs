@@ -1,4 +1,5 @@
-use clap::{App, Arg};
+use bytesize::ByteSize;
+use clap::{Arg, Command};
 use futures_lite::{
     stream::{self, StreamExt},
     AsyncReadExt, AsyncWriteExt,
@@ -11,7 +12,6 @@ use glommio::{
     },
     LocalExecutorBuilder, Placement,
 };
-use pretty_bytes::converter;
 use std::{
     cell::Cell,
     fs,
@@ -51,11 +51,11 @@ async fn stream_write<T: AsyncWriteExt + std::marker::Unpin, S: Into<String>>(
 
     let endw = Instant::now();
     let time = start.elapsed();
-    let bytes = converter::convert(file_size as _);
-    let rate = converter::convert((file_size as f64 / time.as_secs_f64()) as _);
+    let bytes = ByteSize(file_size as _);
+    let rate = ByteSize((file_size as f64 / time.as_secs_f64()) as _);
     println!("{name}: Wrote {bytes} in {time:#?}, {rate}/s");
     stream.close().await.unwrap();
-    let rate = converter::convert((file_size as f64 / start.elapsed().as_secs_f64()) as _);
+    let rate = ByteSize((file_size as f64 / start.elapsed().as_secs_f64()) as _);
     let time = endw.elapsed();
     println!("{name}: Closed in {time:#?}, Amortized total {rate}/s");
 }
@@ -82,8 +82,8 @@ async fn stream_scan<T: AsyncReadExt + std::marker::Unpin, S: Into<String>>(
     let time = start.elapsed();
     let name = name.into();
 
-    let bytes = converter::convert(bytes_read as _);
-    let rate = converter::convert((bytes_read as f64 / time.as_secs_f64()) as _);
+    let bytes = ByteSize(bytes_read as _);
+    let rate = ByteSize((bytes_read as f64 / time.as_secs_f64()) as _);
     println!(
         "{name}: Scanned {bytes} in {time:#?}, {rate}/s, {} IOPS",
         (ops as f64 / time.as_secs_f64()) as usize
@@ -115,8 +115,8 @@ async fn stream_scan_alt_api<S: Into<String>>(
     let time = start.elapsed();
     let name = name.into();
 
-    let bytes = converter::convert(bytes_read as _);
-    let rate = converter::convert((bytes_read as f64 / time.as_secs_f64()) as _);
+    let bytes = ByteSize(bytes_read as _);
+    let rate = ByteSize((bytes_read as f64 / time.as_secs_f64()) as _);
     println!(
         "{name}: Scanned {bytes} in {time:#?}, {rate}/s, {} IOPS",
         (ops as f64 / time.as_secs_f64()) as usize
@@ -213,7 +213,7 @@ async fn random_read<S: Into<String>>(
     };
 
     assert_eq!(finished, parallelism as _);
-    let bytes = converter::convert(random as _);
+    let bytes = ByteSize(random as _);
     let dur = time.elapsed();
     println!(
         "{name}: Random Read (uniform) size span of {bytes}, for {dur:#?}, {} IOPS",
@@ -262,8 +262,8 @@ async fn random_many_read<S: Into<String>>(
     };
 
     assert_eq!(finished, parallelism as _);
-    let bytes = converter::convert(random as _);
-    let max_merged = converter::convert(max_buffer_size as _);
+    let bytes = ByteSize(random as _);
+    let max_merged = ByteSize(max_buffer_size as _);
     let dur = time.elapsed();
     println!(
         "{name}: Random Bulk Read (uniform) size span of {bytes}, for {dur:#?} (max merged size \
@@ -273,27 +273,25 @@ async fn random_many_read<S: Into<String>>(
 }
 
 fn main() {
-    let matches = App::new("storage example")
+    let matches = Command::new("storage example")
         .version("0.1.0")
         .author("Glauber Costa <glauber@datadoghq.com>")
         .about("demonstrate glommio's storage APIs")
         .arg(
-            Arg::with_name("storage_dir")
+            Arg::new("storage_dir")
                 .long("dir")
-                .takes_value(true)
                 .required(true)
                 .help("The directory where to write and read file for this test"),
         )
         .arg(
-            Arg::with_name("file_size")
+            Arg::new("file_size")
                 .long("size-gb")
-                .takes_value(true)
                 .required(false)
                 .help("size of the file in GB (default: 2 * memory_size)"),
         )
         .get_matches();
 
-    let path = matches.value_of("storage_dir").unwrap();
+    let path = matches.get_one::<String>("storage_dir").unwrap();
     let mut dir = PathBuf::from(path);
     assert!(dir.exists());
     dir.push("benchfiles");
@@ -303,7 +301,7 @@ fn main() {
     let total_memory = sys_info::mem_info().unwrap().total << 10;
 
     let file_size = matches
-        .value_of("file_size")
+        .get_one::<String>("file_size")
         .map(|s| s.parse::<u64>().unwrap() << 30)
         .unwrap_or(total_memory * 2);
 

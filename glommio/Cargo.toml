@@ -18,16 +18,16 @@ readme = "../README.md"
 rust-version = "1.65"
 
 [dependencies]
-ahash = "0.7"
+ahash = "0.8"
 backtrace = { version = "0.3" }
 bitflags = "2.4"
-bitmaps = "3.1"
-buddy-alloc = "0.4"
-concurrent-queue = "1.2"
+bitmaps = "3.2"
+buddy-alloc = "0.5"
+concurrent-queue = "2.4"
 crossbeam = "0.8"
 enclose = "1.1"
-flume = { version = "0.10", features = ["async"] }
-futures-lite = "1.12"
+flume = { version = "0.11", features = ["async"] }
+futures-lite = "2.1"
 intrusive-collections = "0.9"
 lazy_static = "1.4"
 libc = "0.2"
@@ -35,18 +35,18 @@ lockfree = "0.5"
 log = "0.4"
 nix = "0.23"
 pin-project-lite = "0.2"
-rlimit = "0.6"
+rlimit = "0.10"
 scoped-tls = "1.0"
-scopeguard = "1.1"
+scopeguard = "1.2"
 signal-hook = { version = "0.3" }
-sketches-ddsketch = "0.1"
-smallvec = { version = "1.7", features = ["union"] }
-socket2 = { version = "0.4", features = ["all"] }
+sketches-ddsketch = "0.2"
+smallvec = { version = "1.11", features = ["union"] }
+socket2 = { version = "0.5", features = ["all"] }
 tracing = "0.1"
-typenum = "1.15"
+typenum = "1.17"
 
 [dev-dependencies]
-fastrand = "1"
+fastrand = "2"
 futures = "0"
 hdrhistogram = "7"
 pretty_env_logger = "0"
